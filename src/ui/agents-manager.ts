@@ -172,6 +172,29 @@ function createFrameLine(theme: ExtensionContext["ui"]["theme"], line: string, i
 	return `${theme.fg("accent", "│ ")}${line}${" ".repeat(pad)}${theme.fg("accent", " │")}`;
 }
 
+function centerRenderedLines(lines: string[], width: number): string[] {
+	const renderedWidth = lines.reduce((max, line) => Math.max(max, visibleWidth(line)), 0);
+	const leftPad = Math.max(0, Math.floor((width - renderedWidth) / 2));
+	if (leftPad === 0) return lines;
+	const prefix = " ".repeat(leftPad);
+	return lines.map((line) => `${prefix}${line}`);
+}
+
+function renderCenteredDialog(
+	theme: ExtensionContext["ui"]["theme"],
+	width: number,
+	lines: string[],
+	maxInnerWidth = 64,
+): string[] {
+	const innerWidth = Math.max(20, Math.min(width - 4, maxInnerWidth));
+	const top = theme.fg("accent", `┌${"─".repeat(innerWidth + 2)}┐`);
+	const bottom = theme.fg("accent", `└${"─".repeat(innerWidth + 2)}┘`);
+	return centerRenderedLines(
+		[top, ...lines.map((line) => createFrameLine(theme, truncateToWidth(line, innerWidth, theme.fg("dim", "...")), innerWidth)), bottom],
+		width,
+	);
+}
+
 // ── Main Dialog ───────────────────────────────────────────────────────
 
 class AgentsManagerDialog implements Focusable {
@@ -476,17 +499,18 @@ class AgentsManagerDialog implements Focusable {
 	}
 
 	private renderEditBundled(width: number): string[] {
-		const innerWidth = Math.max(20, Math.min(width - 4, 64));
+		const maxInnerWidth = 64;
+		const innerWidth = Math.max(20, Math.min(width - 4, maxInnerWidth));
 		const a = this.currentAgent!;
 		const lines: string[] = [
 			this.theme.fg("accent", this.theme.bold(`Edit ${a.name} (bundled)`)),
 			this.theme.fg("dim", "Only model and thinking can be changed for bundled agents."),
 			"",
 			this.theme.fg("muted", "Model:"),
-			...this.bundledModelInput.render(Math.min(innerWidth, 60)),
-			"",
-			this.theme.fg("muted", "Thinking level:"),
 		];
+		lines.push(...this.bundledModelInput.render(innerWidth - 2));
+		lines.push("");
+		lines.push(this.theme.fg("muted", "Thinking level:"));
 		for (let i = 0; i < THINKING_LEVELS.length; i++) {
 			const level = THINKING_LEVELS[i]!;
 			const prefix = i === this.bundledThinkingIndex ? this.theme.fg("accent", "→ ") : "  ";
@@ -497,9 +521,7 @@ class AgentsManagerDialog implements Focusable {
 			lines.push("", this.theme.fg(this.bundledEditMessage.tone === "error" ? "error" : "success", this.bundledEditMessage.text));
 		}
 		lines.push("", this.theme.fg("dim", "enter save • esc back"));
-		const top = this.theme.fg("accent", `┌${"─".repeat(innerWidth + 2)}┐`);
-		const bottom = this.theme.fg("accent", `└${"─".repeat(innerWidth + 2)}┘`);
-		return [top, ...lines.map((line) => createFrameLine(this.theme, truncateToWidth(line, innerWidth, this.theme.fg("dim", "...")), innerWidth)), bottom];
+		return renderCenteredDialog(this.theme, width, lines, maxInnerWidth);
 	}
 
 	private renderEditFull(width: number): string[] {
@@ -606,7 +628,8 @@ class AgentsManagerDialog implements Focusable {
 	}
 
 	private renderDeleteConfirm(width: number): string[] {
-		const innerWidth = Math.max(20, Math.min(width - 4, 64));
+		const maxInnerWidth = 64;
+		const innerWidth = Math.max(20, Math.min(width - 4, maxInnerWidth));
 		const a = this.currentAgent;
 		const name = a ? a.name : "this agent";
 		const lines = [
@@ -616,9 +639,7 @@ class AgentsManagerDialog implements Focusable {
 			"",
 			this.theme.fg("dim", "enter/y confirm • esc cancel"),
 		];
-		const top = this.theme.fg("accent", `┌${"─".repeat(innerWidth + 2)}┐`);
-		const bottom = this.theme.fg("accent", `└${"─".repeat(innerWidth + 2)}┘`);
-		return [top, ...lines.map((line) => createFrameLine(this.theme, truncateToWidth(line, innerWidth, this.theme.fg("dim", "...")), innerWidth)), bottom];
+		return renderCenteredDialog(this.theme, width, lines, maxInnerWidth);
 	}
 
 	// ── Input handling ─────────────────────────────────────────────────

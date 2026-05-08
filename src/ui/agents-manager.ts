@@ -622,9 +622,7 @@ class AgentsManagerDialog implements Focusable {
 			lines.push("", this.theme.fg("dim", "↑↓ choose • enter create • alt+← back • esc cancel"));
 		}
 
-		const top = this.theme.fg("accent", `┌${"─".repeat(innerWidth + 2)}┐`);
-		const bottom = this.theme.fg("accent", `└${"─".repeat(innerWidth + 2)}┘`);
-		return [top, ...lines.map((line) => createFrameLine(this.theme, truncateToWidth(line, innerWidth, this.theme.fg("dim", "...")), innerWidth)), bottom];
+		return renderCenteredDialog(this.theme, width, lines, 64);
 	}
 
 	private renderDeleteConfirm(width: number): string[] {

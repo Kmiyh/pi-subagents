@@ -85,6 +85,29 @@ Use a chain: first have scout find the read tool, then have planner suggest impr
 /implement-and-review add input validation to API endpoints
 ```
 
+## /agents command
+
+The `/agents` command opens an interactive UI for managing subagents:
+
+- **Browse**: scroll through all available agents, see name, source (bundled/user/project), model, and thinking level
+- **Preview**: view agent frontmatter and full system prompt with scrolling (↑/↓, PgUp/PgDn)
+- **Edit bundled**: change only the `model` and `thinking` fields of bundled agents (all other fields are read-only)
+- **Edit user/project**: full editor for the .md file (frontmatter + system prompt), save with `ctrl+s`
+- **Create**: step-by-step wizard (name → description → model → thinking → tools → system prompt → scope)
+- **Delete**: remove user or project agents (bundled agents cannot be deleted)
+
+Key bindings:
+
+| Key | Action |
+|-----|--------|
+| `↑` / `↓` | navigate agents |
+| `enter` | preview selected agent |
+| `c` | create new agent |
+| `e` | edit agent (bundled: model/thinking only; user/project: full .md) |
+| `backspace` / `d` | delete agent (user/project only) |
+| `esc` | back / close |
+| `ctrl+s` | save (in edit mode) |
+
 ## Tool modes
 
 | Mode | Parameter | Description |

@@ -23,6 +23,7 @@ import { type ExtensionAPI, getMarkdownTheme, withFileMutationQueue } from "@ear
 import { Container, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { type AgentConfig, type AgentScope, discoverAgents } from "./agents.js";
+import { showAgentsManager } from "./ui/agents-manager.js";
 
 const MAX_PARALLEL_TASKS = 8;
 const MAX_CONCURRENCY = 4;
@@ -985,6 +986,18 @@ export default function (pi: ExtensionAPI) {
 
 			const text = result.content[0];
 			return new Text(text?.type === "text" ? text.text : "(no output)", 0, 0);
+		},
+	});
+
+	pi.registerCommand("agents", {
+		description: "Browse, preview, edit, create, and delete subagents",
+		handler: async (_args, ctx) => {
+			if (!ctx.hasUI) {
+				ctx.ui.notify("/agents requires interactive mode", "warning");
+				return;
+			}
+			const discovery = discoverAgents(ctx.cwd, "both");
+			await showAgentsManager(ctx, discovery.agents);
 		},
 	});
 }

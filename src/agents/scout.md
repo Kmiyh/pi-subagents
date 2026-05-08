@@ -2,6 +2,7 @@
 name: scout
 description: Fast codebase recon that returns compressed context for handoff to other agents
 tools: read, grep, find, ls, bash
+thinking: low
 model: glm-5.1:cloud
 ---
 

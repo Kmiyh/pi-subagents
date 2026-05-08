@@ -265,6 +265,7 @@ async function runSingleAgent(
 	const args: string[] = ["--mode", "json", "-p", "--no-session"];
 	if (agent.model) args.push("--model", agent.model);
 	if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
+	if (agent.thinking) args.push("--thinking", agent.thinking);
 
 	let tmpPromptDir: string | null = null;
 	let tmpPromptPath: string | null = null;

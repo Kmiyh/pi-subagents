@@ -1,6 +1,7 @@
 ---
 name: worker
 description: General-purpose subagent with full capabilities, isolated context
+thinking: low
 model: glm-5.1:cloud
 ---
 

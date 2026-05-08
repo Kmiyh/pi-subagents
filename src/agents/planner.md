@@ -2,6 +2,7 @@
 name: planner
 description: Creates implementation plans from context and requirements
 tools: read, grep, find, ls
+thinking: low
 model: glm-5.1:cloud
 ---
 

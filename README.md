@@ -103,12 +103,13 @@ name: my-agent
 description: What this agent does
 tools: read, grep, find, ls
 model: glm-5.1:cloud
+thinking: low
 ---
 
 System prompt for the agent goes here.
 ```
 
-The `model` field sets which LLM the subagent uses. Bundled agents default to `glm-5.1:cloud` — to change the model, edit the frontmatter in `src/agents/*.md`.
+The `model` field sets which LLM the subagent uses. The `thinking` field sets the reasoning level (`off`, `low`, `medium`, `high`, `xhigh`). To change model or reasoning, edit the frontmatter in `src/agents/*.md`.
 
 Agent locations:
 

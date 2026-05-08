@@ -1,9 +1,9 @@
 /**
- * Agents Manager — interactive TUI for browsing, previewing, editing, creating, and deleting subagents
+ * Agents Manager — interactive TUI for browsing, previewing, and editing subagents
  */
 
 import * as fs from "node:fs";
-import { getMarkdownTheme, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { getMarkdownTheme, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
 	Container,
 	Editor,
@@ -20,13 +20,9 @@ import {
 } from "@earendil-works/pi-tui";
 import type { AgentConfig } from "../agents.js";
 import {
-	createAgentFile,
 	deleteAgentFile,
 	isBundledAgent,
 	isDeletableAgent,
-	isEditableAgent,
-	normalizeAgentName,
-	readAgentFile,
 	THINKING_LEVELS,
 	writeAgentFile,
 	writeBundledAgentOverrides,
@@ -34,21 +30,9 @@ import {
 
 // ── Types ──────────────────────────────────────────────────────────────
 
-type Mode = "browse" | "preview" | "edit-bundled" | "edit-full" | "create" | "delete-confirm";
+type Mode = "browse" | "preview" | "edit-bundled" | "edit-full" | "delete-confirm";
 
 // ── Utility ────────────────────────────────────────────────────────────
-
-function agentLabel(agent: AgentConfig, theme: ExtensionContext["ui"]["theme"]): string {
-	const source = theme.fg("muted", `(${agent.source})`);
-	const model = agent.model ? theme.fg("dim", ` · ${agent.model}`) : "";
-	const thinking = agent.thinking ? theme.fg("dim", ` · ${agent.thinking}`) : "";
-	return `${theme.fg("accent", agent.name)} ${source}${model}${thinking}`;
-}
-
-function agentDescription(agent: AgentConfig, maxWidth: number, theme: ExtensionContext["ui"]["theme"]): string {
-	const desc = agent.description;
-	return truncateToWidth(theme.fg("dim", ` — ${desc}`), maxWidth, theme.fg("dim", "..."));
-}
 
 function scopeLabel(agent: AgentConfig): string {
 	if (agent.source === "bundled") return "bundled";
@@ -152,7 +136,6 @@ class ScrollableAgentPreview {
 
 	handleInput(data: string): void {
 		const maxContentHeight = Math.max(10, Math.floor(this.getRows() * 0.78)) - 3;
-		// Recompute content length — approximate
 		const approxTotal = this.agent.systemPrompt.split("\n").length + 15;
 		const maxScroll = Math.max(0, approxTotal - maxContentHeight);
 
@@ -214,16 +197,6 @@ class AgentsManagerDialog implements Focusable {
 	private bundledModelInput = new Input();
 	private bundledThinkingIndex = 0;
 	private bundledEditMessage: { text: string; tone: "error" | "success" } | undefined;
-	// create state
-	private createStep: "name" | "description" | "model" | "thinking" | "tools" | "prompt" | "scope" = "name";
-	private createName = "";
-	private createDescription = "";
-	private createModel = "";
-	private createThinkingIndex = 0;
-	private createTools = "";
-	private createScope: "user" | "project" = "user";
-	private createError: string | undefined;
-	private createEditor: Editor | undefined;
 	// delete
 	private deleteReturnMode: Mode = "browse";
 
@@ -254,8 +227,7 @@ class AgentsManagerDialog implements Focusable {
 	}
 
 	private syncFocus(): void {
-		this.browseInput.focused = this._focused && (this.mode === "browse" || this.mode === "edit-full" && this.createStep === "name");
-		// editEditor focus handled separately
+		this.browseInput.focused = this._focused && this.mode === "browse";
 	}
 
 	private refreshFilter(): void {
@@ -324,22 +296,6 @@ class AgentsManagerDialog implements Focusable {
 		this.requestRender();
 	}
 
-	private enterCreate(): void {
-		this.createStep = "name";
-		this.createName = "";
-		this.createDescription = "";
-		this.createModel = "";
-		this.createThinkingIndex = 0;
-		this.createTools = "";
-		this.createScope = "user";
-		this.createError = undefined;
-		this.createEditor = undefined;
-		this.browseInput.setValue("");
-		this.mode = "create";
-		this.syncFocus();
-		this.requestRender();
-	}
-
 	private enterDeleteConfirm(returnMode: Mode = "browse"): void {
 		if (!this.currentAgent) return;
 		this.deleteReturnMode = returnMode;
@@ -358,7 +314,6 @@ class AgentsManagerDialog implements Focusable {
 		try {
 			writeBundledAgentOverrides(updated);
 			this.currentAgent = updated;
-			// Also update in the agents array
 			const idx = this.agents.findIndex((a) => a.filePath === updated.filePath);
 			if (idx >= 0) this.agents[idx] = updated;
 			this.refreshFilter();
@@ -424,34 +379,6 @@ class AgentsManagerDialog implements Focusable {
 		this.exitToBrowse();
 	}
 
-	private async submitCreate(): Promise<void> {
-		const name = normalizeAgentName(this.createName);
-		if (!name) { this.createError = "Name is required (lowercase, numbers, hyphens)"; this.requestRender(); return; }
-		if (!this.createDescription.trim()) { this.createError = "Description is required"; this.requestRender(); return; }
-
-		const thinking = THINKING_LEVELS[this.createThinkingIndex]!;
-		const tools = this.createTools.trim() ? this.createTools.split(",").map((t) => t.trim()).filter(Boolean) : undefined;
-
-		try {
-			const agent = createAgentFile({
-				name,
-				description: this.createDescription.trim(),
-				model: this.createModel.trim() || undefined,
-				thinking: thinking === "off" ? undefined : thinking,
-				tools,
-				systemPrompt: this.createEditor?.getText() ?? "You are a helpful assistant.",
-				scope: this.createScope,
-				cwd: this.ctx.cwd,
-			});
-			this.ctx.ui.notify(`Created agent: ${agent.name}`, "info");
-			// Reload to pick up the new agent
-			await (this.ctx as ExtensionContext & { reload?: () => Promise<void> }).reload?.()
-		} catch (e) {
-			this.createError = e instanceof Error ? e.message : "Failed to create agent";
-			this.requestRender();
-		}
-	}
-
 	// ── Render ─────────────────────────────────────────────────────────
 
 	render(width: number): string[] {
@@ -460,7 +387,6 @@ class AgentsManagerDialog implements Focusable {
 			case "preview": return this.preview?.render(width) ?? this.renderBrowse(width);
 			case "edit-bundled": return this.renderEditBundled(width);
 			case "edit-full": return this.renderEditFull(width);
-			case "create": return this.renderCreate(width);
 			case "delete-confirm": return this.renderDeleteConfirm(width);
 		}
 	}
@@ -482,7 +408,7 @@ class AgentsManagerDialog implements Focusable {
 			const model = agent.model ? this.theme.fg("dim", ` · ${agent.model}`) : "";
 			const thinking = agent.thinking ? this.theme.fg("dim", ` · ${agent.thinking}`) : "";
 			const desc = selected ? this.theme.fg("dim", ` — ${agent.description}`) : this.theme.fg("dim", ` — ${truncateToWidth(agent.description, innerWidth - 40, this.theme.fg("dim", "..."))}`);
-			root.addChild(new SingleLineText(`${prefix}${name}${source}${model}${thinking}${desc}` as string, this.theme.fg("dim", "...")));
+			root.addChild(new SingleLineText(`${prefix}${name}${source}${model}${thinking}${desc}`, this.theme.fg("dim", "...")));
 		}
 
 		if (this.filteredAgents.length === 0) {
@@ -490,7 +416,7 @@ class AgentsManagerDialog implements Focusable {
 		}
 
 		root.addChild(new Spacer(1));
-		const actions = ["↑/↓ navigate", "enter preview", "c create", "esc close"];
+		const actions = ["↑/↓ navigate", "enter preview", "esc close"];
 		root.addChild(new Text(this.theme.fg("dim", actions.join(" • ")), 1, 0));
 
 		const top = this.theme.fg("accent", `┌${"─".repeat(innerWidth + 2)}┐`);
@@ -537,9 +463,6 @@ class AgentsManagerDialog implements Focusable {
 			lines.push(this.theme.fg(this.editMessage.tone === "error" ? "error" : "success", this.editMessage.text));
 			lines.push("");
 		}
-		// Render editor with virtual height
-		const proxyTui = { requestRender: () => this.requestRender(), terminal: { ...this.tui.terminal, rows: Math.max(1, Math.floor(this.tui.terminal.rows * 0.78)) } } as TUI;
-		// Re-create editor with proxy if needed — simpler: just render the current editor
 		const editorLines = this.editEditor.render(innerWidth);
 		lines.push(...editorLines);
 		lines.push("");
@@ -547,82 +470,6 @@ class AgentsManagerDialog implements Focusable {
 		const top = this.theme.fg("accent", `┌${"─".repeat(innerWidth + 2)}┐`);
 		const bottom = this.theme.fg("accent", `└${"─".repeat(innerWidth + 2)}┘`);
 		return [top, ...lines.map((line) => createFrameLine(this.theme, truncateToWidth(line, innerWidth, this.theme.fg("dim", "...")), innerWidth)), bottom];
-	}
-
-	private renderCreate(width: number): string[] {
-		const innerWidth = Math.max(20, Math.min(width - 4, 64));
-		const lines: string[] = [];
-		const step = this.createStep;
-		const stepLabels: Record<typeof this.createStep, string> = {
-			name: "Name",
-			description: "Description",
-			model: "Model (optional)",
-			thinking: "Thinking level",
-			tools: "Tools (optional, comma-separated)",
-			prompt: "System Prompt",
-			scope: "Scope",
-		};
-
-		lines.push(this.theme.fg("accent", this.theme.bold(`Create Agent — ${stepLabels[step]}`)));
-		lines.push("");
-
-		if (step === "name") {
-			this.browseInput.setValue(this.createName);
-			lines.push(this.theme.fg("dim", "Use lowercase letters, numbers, and hyphens"));
-			lines.push(...this.browseInput.render(Math.min(innerWidth, 60)));
-			if (this.createError) lines.push("", this.theme.fg("error", this.createError));
-			lines.push("", this.theme.fg("dim", "enter next • esc cancel"));
-		} else if (step === "description") {
-			lines.push(this.theme.fg("dim", "Describe what this agent does"));
-			if (!this.createEditor) {
-				this.createEditor = new Editor(this.tui, { borderColor: (t: string) => this.theme.fg("accent", t), selectList: { selectedPrefix: (t: string) => this.theme.fg("accent", t), selectedText: (t: string) => this.theme.bg("selectedBg", this.theme.fg("text", t)), description: (t: string) => this.theme.fg("muted", t), scrollInfo: (t: string) => this.theme.fg("dim", t), noMatch: (t: string) => this.theme.fg("warning", t) } });
-				this.createEditor.setText(this.createDescription);
-			}
-			lines.push(...this.createEditor.render(Math.min(innerWidth, 60)));
-			if (this.createError) lines.push("", this.theme.fg("error", this.createError));
-			lines.push("", this.theme.fg("dim", "enter next • alt+← back • esc cancel"));
-		} else if (step === "model") {
-			this.browseInput.setValue(this.createModel);
-			lines.push(this.theme.fg("dim", "Model name (e.g. glm-5.1:cloud, claude-sonnet-4-5)"));
-			lines.push(...this.browseInput.render(Math.min(innerWidth, 60)));
-			lines.push("", this.theme.fg("dim", "enter next • alt+← back • esc cancel"));
-		} else if (step === "thinking") {
-			for (let i = 0; i < THINKING_LEVELS.length; i++) {
-				const level = THINKING_LEVELS[i]!;
-				const prefix = i === this.createThinkingIndex ? this.theme.fg("accent", "→ ") : "  ";
-				const label = i === this.createThinkingIndex ? this.theme.fg("accent", level) : level;
-				lines.push(`${prefix}${label}`);
-			}
-			lines.push("", this.theme.fg("dim", "↑↓ choose • enter next • alt+← back • esc cancel"));
-		} else if (step === "tools") {
-			this.browseInput.setValue(this.createTools);
-			lines.push(this.theme.fg("dim", "Comma-separated tool names (e.g. read, grep, find, ls, bash)"));
-			lines.push(...this.browseInput.render(Math.min(innerWidth, 60)));
-			lines.push("", this.theme.fg("dim", "enter next • alt+← back • esc cancel"));
-		} else if (step === "prompt") {
-			if (!this.createEditor) {
-				this.createEditor = new Editor(this.tui, { borderColor: (t: string) => this.theme.fg("accent", t), selectList: { selectedPrefix: (t: string) => this.theme.fg("accent", t), selectedText: (t: string) => this.theme.bg("selectedBg", this.theme.fg("text", t)), description: (t: string) => this.theme.fg("muted", t), scrollInfo: (t: string) => this.theme.fg("dim", t), noMatch: (t: string) => this.theme.fg("warning", t) } });
-				this.createEditor.setText("You are a helpful assistant.");
-			}
-			lines.push(this.theme.fg("dim", "Write the system prompt for this agent"));
-			lines.push(...this.createEditor.render(Math.min(innerWidth, 60)));
-			if (this.createError) lines.push("", this.theme.fg("error", this.createError));
-			lines.push("", this.theme.fg("dim", "ctrl+s or enter create • alt+← back • alt+→ next • esc cancel"));
-		} else if (step === "scope") {
-			const scopes: Array<{ value: "user" | "project"; label: string; desc: string }> = [
-				{ value: "user", label: "Global", desc: `Save in ${getUserAgentsDirFromOps()}` },
-				{ value: "project", label: "Project", desc: "Save in .pi/agents/ (current project)" },
-			];
-			for (const s of scopes) {
-				const prefix = s.value === this.createScope ? this.theme.fg("accent", "→ ") : "  ";
-				const label = s.value === this.createScope ? this.theme.fg("accent", s.label) : s.label;
-				const desc = this.theme.fg("dim", ` — ${s.desc}`);
-				lines.push(`${prefix}${label}${desc}`);
-			}
-			lines.push("", this.theme.fg("dim", "↑↓ choose • enter create • alt+← back • esc cancel"));
-		}
-
-		return renderCenteredDialog(this.theme, width, lines, 64);
 	}
 
 	private renderDeleteConfirm(width: number): string[] {
@@ -648,7 +495,6 @@ class AgentsManagerDialog implements Focusable {
 			case "preview": this.handlePreviewInput(data); break;
 			case "edit-bundled": this.handleEditBundledInput(data); break;
 			case "edit-full": this.handleEditFullInput(data); break;
-			case "create": this.handleCreateInput(data); break;
 			case "delete-confirm": this.handleDeleteConfirmInput(data); break;
 		}
 		this.requestRender();
@@ -662,7 +508,6 @@ class AgentsManagerDialog implements Focusable {
 			if (agent) this.enterPreview(agent);
 			return;
 		}
-		if (data === "c" || data === "C") { this.enterCreate(); return; }
 		if (matchesKey(data, Key.escape)) {
 			if (this.browseQuery) { this.browseQuery = ""; this.browseInput.setValue(""); this.refreshFilter(); return; }
 			this.done(); return;
@@ -700,7 +545,6 @@ class AgentsManagerDialog implements Focusable {
 	private handleEditFullInput(data: string): void {
 		if (!this.editEditor) { this.mode = "preview"; this.requestRender(); return; }
 		if (matchesKey(data, Key.escape)) {
-			// For simplicity, just go back (no dirty check for now)
 			this.exitEditFull(); return;
 		}
 		if (matchesKey(data, Key.ctrl("s"))) { this.saveFullEdits(); return; }
@@ -708,118 +552,10 @@ class AgentsManagerDialog implements Focusable {
 		this.editEditor.handleInput(data);
 	}
 
-	private handleCreateInput(data: string): void {
-		if (matchesKey(data, Key.escape)) { this.exitToBrowse(); return; }
-		if (matchesKey(data, Key.alt("left"))) { this.goToPrevCreateStep(); return; }
-		if (matchesKey(data, Key.alt("right"))) { this.advanceCreateStep(); return; }
-
-		const step = this.createStep;
-		if (step === "name") {
-			if (matchesKey(data, Key.enter)) { this.advanceCreateStep(); return; }
-			this.browseInput.handleInput(data);
-			this.createName = this.browseInput.getValue();
-		} else if (step === "description") {
-			if (matchesKey(data, Key.escape)) { this.exitToBrowse(); return; }
-			if (matchesKey(data, Key.alt("left"))) { this.goToPrevCreateStep(); return; }
-			if (matchesKey(data, Key.alt("right"))) { this.persistCreateInput(); this.advanceCreateStep(); return; }
-			if (matchesKey(data, Key.enter)) {
-				this.persistCreateInput();
-				this.createDescription = this.createEditor?.getText() ?? this.createDescription;
-				this.advanceCreateStep();
-				return;
-			}
-			if (matchesKey(data, Key.ctrl("j"))) {
-				// Insert newline in editor
-				this.createEditor?.handleInput("\\n");
-				return;
-			}
-			this.createEditor?.handleInput(data);
-			this.createDescription = this.createEditor?.getText() ?? this.createDescription;
-		} else if (step === "model") {
-			if (matchesKey(data, Key.enter)) { this.advanceCreateStep(); return; }
-			this.browseInput.handleInput(data);
-			this.createModel = this.browseInput.getValue();
-		} else if (step === "thinking") {
-			if (matchesKey(data, Key.up)) { this.createThinkingIndex = Math.max(0, this.createThinkingIndex - 1); return; }
-			if (matchesKey(data, Key.down)) { this.createThinkingIndex = Math.min(THINKING_LEVELS.length - 1, this.createThinkingIndex + 1); return; }
-			if (matchesKey(data, Key.enter)) { this.advanceCreateStep(); return; }
-		} else if (step === "tools") {
-			if (matchesKey(data, Key.enter)) { this.advanceCreateStep(); return; }
-			this.browseInput.handleInput(data);
-			this.createTools = this.browseInput.getValue();
-		} else if (step === "prompt") {
-			if (matchesKey(data, Key.escape)) { this.exitToBrowse(); return; }
-			if (matchesKey(data, Key.alt("left"))) { this.goToPrevCreateStep(); return; }
-			if (matchesKey(data, Key.alt("right"))) { this.persistCreateInput(); this.advanceCreateStep(); return; }
-			if (matchesKey(data, Key.ctrl("s")) || matchesKey(data, Key.enter)) { void this.submitCreate(); return; }
-			this.createEditor?.handleInput(data);
-		} else if (step === "scope") {
-			if (matchesKey(data, Key.up)) { this.createScope = "user"; return; }
-			if (matchesKey(data, Key.down)) { this.createScope = "project"; return; }
-			if (matchesKey(data, Key.enter)) { void this.submitCreate(); return; }
-		}
-		this.createError = undefined;
-	}
-
 	private handleDeleteConfirmInput(data: string): void {
 		if (matchesKey(data, Key.escape)) { this.mode = this.deleteReturnMode === "preview" ? "preview" : "browse"; this.syncFocus(); return; }
 		if (matchesKey(data, Key.enter) || data === "y" || data === "Y") { void this.confirmDelete(); }
 	}
-
-	private advanceCreateStep(): void {
-		this.persistCreateInput();
-		this.createError = undefined;
-		const steps: Array<typeof this.createStep> = ["name", "description", "model", "thinking", "tools", "prompt", "scope"];
-		const idx = steps.indexOf(this.createStep);
-		if (idx < 0 || idx >= steps.length - 1) return;
-		this.createStep = steps[idx + 1]!;
-		this.prepareCreateStep();
-	}
-
-	private goToPrevCreateStep(): void {
-		this.persistCreateInput();
-		this.createError = undefined;
-		const steps: Array<typeof this.createStep> = ["name", "description", "model", "thinking", "tools", "prompt", "scope"];
-		const idx = steps.indexOf(this.createStep);
-		if (idx <= 0) return;
-		this.createStep = steps[idx - 1]!;
-		this.prepareCreateStep();
-	}
-
-	private persistCreateInput(): void {
-		switch (this.createStep) {
-			case "name": this.createName = this.browseInput.getValue(); break;
-			case "description": this.createDescription = this.createEditor?.getText() ?? ""; break;
-			case "model": this.createModel = this.browseInput.getValue(); break;
-			case "tools": this.createTools = this.browseInput.getValue(); break;
-			case "prompt": break; // persisted on the fly
-			case "thinking": break; // persisted on the fly
-			case "scope": break;
-		}
-	}
-
-	private prepareCreateStep(): void {
-		this.createEditor = undefined;
-		const step = this.createStep;
-		if (step === "name") { this.browseInput.setValue(this.createName); }
-		else if (step === "description") {
-			this.createEditor = new Editor(this.tui, { borderColor: (t: string) => this.theme.fg("accent", t), selectList: { selectedPrefix: (t: string) => this.theme.fg("accent", t), selectedText: (t: string) => this.theme.bg("selectedBg", this.theme.fg("text", t)), description: (t: string) => this.theme.fg("muted", t), scrollInfo: (t: string) => this.theme.fg("dim", t), noMatch: (t: string) => this.theme.fg("warning", t) } });
-			this.createEditor.setText(this.createDescription);
-		} else if (step === "model") { this.browseInput.setValue(this.createModel); }
-		else if (step === "tools") { this.browseInput.setValue(this.createTools); }
-		else if (step === "prompt") {
-			this.createEditor = new Editor(this.tui, { borderColor: (t: string) => this.theme.fg("accent", t), selectList: { selectedPrefix: (t: string) => this.theme.fg("accent", t), selectedText: (t: string) => this.theme.bg("selectedBg", this.theme.fg("text", t)), description: (t: string) => this.theme.fg("muted", t), scrollInfo: (t: string) => this.theme.fg("dim", t), noMatch: (t: string) => this.theme.fg("warning", t) } });
-			this.createEditor.setText("You are a helpful assistant.");
-		}
-	}
-}
-
-// ── Helpers from agent-ops (avoid circular) ──────────────────────────
-
-function getUserAgentsDirFromOps(): string {
-	// Inline since we can't import agent-ops (would be circular after we add the import)
-	const { getAgentDir } = require("@earendil-works/pi-coding-agent") as typeof import("@earendil-works/pi-coding-agent");
-	return path.join(getAgentDir(), "agents");
 }
 
 // ── SingleLineText ─────────────────────────────────────────────────────
@@ -846,6 +582,3 @@ export async function showAgentsManager(ctx: ExtensionContext, agents: AgentConf
 		};
 	}, { overlay: true, overlayOptions: { width: "80%", maxHeight: "85%", anchor: "center" } });
 }
-
-// Need path for getUserAgentsDirFromOps
-import * as path from "node:path";

@@ -148,6 +148,7 @@ interface SingleResult {
 	stderr: string;
 	usage: UsageStats;
 	model?: string;
+	thinking?: string;
 	stopReason?: string;
 	errorMessage?: string;
 	step?: number;
@@ -279,6 +280,7 @@ async function runSingleAgent(
 		stderr: "",
 		usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
 		model: agent.model,
+		thinking: agent.thinking,
 		step,
 	};
 
@@ -748,7 +750,7 @@ export default function (pi: ExtensionAPI) {
 
 				if (expanded) {
 					const container = new Container();
-					let header = `${icon} ${theme.fg("toolTitle", theme.bold(r.agent))}${theme.fg("muted", ` (${r.agentSource})`)}`;
+					let header = `${icon} ${theme.fg("toolTitle", theme.bold(r.agent))}${theme.fg("muted", ` (${r.agentSource})`)}${r.model ? theme.fg("dim", ` · ${r.model}`) : ""}${r.thinking ? theme.fg("dim", ` · ${r.thinking}`) : ""}`;
 					if (isError && r.stopReason) header += ` ${theme.fg("error", `[${r.stopReason}]`)}`;
 					container.addChild(new Text(header, 0, 0));
 					if (isError && r.errorMessage)
@@ -784,7 +786,7 @@ export default function (pi: ExtensionAPI) {
 					return container;
 				}
 
-				let text = `${icon} ${theme.fg("toolTitle", theme.bold(r.agent))}${theme.fg("muted", ` (${r.agentSource})`)}`;
+				let text = `${icon} ${theme.fg("toolTitle", theme.bold(r.agent))}${theme.fg("muted", ` (${r.agentSource})`)}${r.model ? theme.fg("dim", ` · ${r.model}`) : ""}${r.thinking ? theme.fg("dim", ` · ${r.thinking}`) : ""}`;
 				if (isError && r.stopReason) text += ` ${theme.fg("error", `[${r.stopReason}]`)}`;
 				if (isError && r.errorMessage) text += `\n${theme.fg("error", `Error: ${r.errorMessage}`)}`;
 				else if (displayItems.length === 0) text += `\n${theme.fg("muted", "(no output)")}`;
@@ -835,7 +837,7 @@ export default function (pi: ExtensionAPI) {
 						container.addChild(new Spacer(1));
 						container.addChild(
 							new Text(
-								`${theme.fg("muted", `─── Step ${r.step}: `) + theme.fg("accent", r.agent)} ${rIcon}`,
+								`${theme.fg("muted", `─── Step ${r.step}: `) + theme.fg("accent", r.agent)}${r.model ? theme.fg("dim", ` · ${r.model}`) : ""}${r.thinking ? theme.fg("dim", ` · ${r.thinking}`) : ""} ${rIcon}`,
 								0,
 								0,
 							),
@@ -882,7 +884,7 @@ export default function (pi: ExtensionAPI) {
 				for (const r of details.results) {
 					const rIcon = r.exitCode === 0 ? theme.fg("success", "✓") : theme.fg("error", "✗");
 					const displayItems = getDisplayItems(r.messages);
-					text += `\n\n${theme.fg("muted", `─── Step ${r.step}: `)}${theme.fg("accent", r.agent)} ${rIcon}`;
+					text += `\n\n${theme.fg("muted", `─── Step ${r.step}: `)}${theme.fg("accent", r.agent)}${r.model ? theme.fg("dim", ` · ${r.model}`) : ""}${r.thinking ? theme.fg("dim", ` · ${r.thinking}`) : ""} ${rIcon}`;
 					if (displayItems.length === 0) text += `\n${theme.fg("muted", "(no output)")}`;
 					else text += `\n${renderDisplayItems(displayItems, 5)}`;
 				}
@@ -923,7 +925,7 @@ export default function (pi: ExtensionAPI) {
 
 						container.addChild(new Spacer(1));
 						container.addChild(
-							new Text(`${theme.fg("muted", "─── ") + theme.fg("accent", r.agent)} ${rIcon}`, 0, 0),
+							new Text(`${theme.fg("muted", "─── ") + theme.fg("accent", r.agent)}${r.model ? theme.fg("dim", ` · ${r.model}`) : ""}${r.thinking ? theme.fg("dim", ` · ${r.thinking}`) : ""} ${rIcon}`, 0, 0),
 						);
 						container.addChild(new Text(theme.fg("muted", "Task: ") + theme.fg("dim", r.task), 0, 0));
 
@@ -968,7 +970,7 @@ export default function (pi: ExtensionAPI) {
 								? theme.fg("success", "✓")
 								: theme.fg("error", "✗");
 					const displayItems = getDisplayItems(r.messages);
-					text += `\n\n${theme.fg("muted", "─── ")}${theme.fg("accent", r.agent)} ${rIcon}`;
+					text += `\n\n${theme.fg("muted", "─── ")}${theme.fg("accent", r.agent)}${r.model ? theme.fg("dim", ` · ${r.model}`) : ""}${r.thinking ? theme.fg("dim", ` · ${r.thinking}`) : ""} ${rIcon}`;
 					if (displayItems.length === 0)
 						text += `\n${theme.fg("muted", r.exitCode === -1 ? "(running...)" : "(no output)")}`;
 					else text += `\n${renderDisplayItems(displayItems, 5)}`;

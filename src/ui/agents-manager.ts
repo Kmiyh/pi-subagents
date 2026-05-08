@@ -580,7 +580,7 @@ class AgentsManagerDialog implements Focusable {
 			}
 			lines.push(...this.createEditor.render(Math.min(innerWidth, 60)));
 			if (this.createError) lines.push("", this.theme.fg("error", this.createError));
-			lines.push("", this.theme.fg("dim", "ctrl+j newline • enter next • alt+← back • esc cancel"));
+			lines.push("", this.theme.fg("dim", "enter next • alt+← back • esc cancel"));
 		} else if (step === "model") {
 			this.browseInput.setValue(this.createModel);
 			lines.push(this.theme.fg("dim", "Model name (e.g. glm-5.1:cloud, claude-sonnet-4-5)"));
@@ -607,7 +607,7 @@ class AgentsManagerDialog implements Focusable {
 			lines.push(this.theme.fg("dim", "Write the system prompt for this agent"));
 			lines.push(...this.createEditor.render(Math.min(innerWidth, 60)));
 			if (this.createError) lines.push("", this.theme.fg("error", this.createError));
-			lines.push("", this.theme.fg("dim", "ctrl+j newline • ctrl+s create • alt+← back • esc cancel"));
+			lines.push("", this.theme.fg("dim", "ctrl+s or enter create • alt+← back • alt+→ next • esc cancel"));
 		} else if (step === "scope") {
 			const scopes: Array<{ value: "user" | "project"; label: string; desc: string }> = [
 				{ value: "user", label: "Global", desc: `Save in ${getUserAgentsDirFromOps()}` },
@@ -719,9 +719,22 @@ class AgentsManagerDialog implements Focusable {
 			this.browseInput.handleInput(data);
 			this.createName = this.browseInput.getValue();
 		} else if (step === "description") {
-			if (matchesKey(data, Key.enter)) { this.advanceCreateStep(); return; }
+			if (matchesKey(data, Key.escape)) { this.exitToBrowse(); return; }
+			if (matchesKey(data, Key.alt("left"))) { this.goToPrevCreateStep(); return; }
+			if (matchesKey(data, Key.alt("right"))) { this.persistCreateInput(); this.advanceCreateStep(); return; }
+			if (matchesKey(data, Key.enter)) {
+				this.persistCreateInput();
+				this.createDescription = this.createEditor?.getText() ?? this.createDescription;
+				this.advanceCreateStep();
+				return;
+			}
+			if (matchesKey(data, Key.ctrl("j"))) {
+				// Insert newline in editor
+				this.createEditor?.handleInput("\\n");
+				return;
+			}
 			this.createEditor?.handleInput(data);
-			this.createDescription = this.createEditor?.getText() ?? "";
+			this.createDescription = this.createEditor?.getText() ?? this.createDescription;
 		} else if (step === "model") {
 			if (matchesKey(data, Key.enter)) { this.advanceCreateStep(); return; }
 			this.browseInput.handleInput(data);
@@ -735,7 +748,10 @@ class AgentsManagerDialog implements Focusable {
 			this.browseInput.handleInput(data);
 			this.createTools = this.browseInput.getValue();
 		} else if (step === "prompt") {
-			if (matchesKey(data, Key.ctrl("s"))) { void this.submitCreate(); return; }
+			if (matchesKey(data, Key.escape)) { this.exitToBrowse(); return; }
+			if (matchesKey(data, Key.alt("left"))) { this.goToPrevCreateStep(); return; }
+			if (matchesKey(data, Key.alt("right"))) { this.persistCreateInput(); this.advanceCreateStep(); return; }
+			if (matchesKey(data, Key.ctrl("s")) || matchesKey(data, Key.enter)) { void this.submitCreate(); return; }
 			this.createEditor?.handleInput(data);
 		} else if (step === "scope") {
 			if (matchesKey(data, Key.up)) { this.createScope = "user"; return; }
